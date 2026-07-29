@@ -59,6 +59,22 @@ describe("stripMarkdownImageAltText", () => {
   it("should handle empty alt text", () => {
     expect(stripMarkdownImageAltText("![](image.png)")).toBe("![](image.png)");
   });
+
+  it("should remove alt text from reference-style images", () => {
+    expect(stripMarkdownImageAltText("![example alt text][img1]")).toBe(
+      "![][img1]",
+    );
+    expect(
+      stripMarkdownImageAltText("Text ![description][ref] more text"),
+    ).toBe("Text ![][ref] more text");
+  });
+
+  it("should preserve the reference label of a reference-style image", () => {
+    // the [ref] label must survive so the image definition still resolves;
+    // only the alt text (the injection channel) is removed
+    expect(stripMarkdownImageAltText("![alt][my-ref]")).toBe("![][my-ref]");
+    expect(stripMarkdownImageAltText("![][keep]")).toBe("![][keep]");
+  });
 });
 
 describe("stripMarkdownLinkTitles", () => {
@@ -130,6 +146,21 @@ describe("stripHiddenAttributes", () => {
         '<img alt="example" title="test" src="pic.jpg" class="image">',
       ),
     ).toBe('<img src="pic.jpg" class="image">');
+  });
+
+  it("should not corrupt content when an attribute value contains the other quote type", () => {
+    // Regression for #1366: an apostrophe inside a double-quoted attribute
+    // (or a double quote inside a single-quoted attribute) must not cause the
+    // closing quote to be mismatched, which previously mangled later text.
+    expect(
+      stripHiddenAttributes(`<Tooltip title="We'll do it" placement="top">`),
+    ).toBe('<Tooltip placement="top">');
+    expect(
+      stripHiddenAttributes(`<img alt="Bob's avatar" src="pic.jpg">`),
+    ).toBe('<img src="pic.jpg">');
+    expect(stripHiddenAttributes(`<div title='say "hi"'>Content</div>`)).toBe(
+      "<div>Content</div>",
+    );
   });
 });
 
@@ -259,6 +290,16 @@ describe("redactGitHubTokens", () => {
     expect(redactGitHubTokens(`OAuth: ${token}`)).toBe(
       "OAuth: [REDACTED_GITHUB_TOKEN]",
     );
+  });
+
+  it("should redact user-to-server tokens (ghu_)", () => {
+    const token = "ghu_16C7e42F292c6912E7710c838347Ae178B4a";
+    expect(redactGitHubTokens(`User token: ${token}`)).toBe(
+      "User token: [REDACTED_GITHUB_TOKEN]",
+    );
+    expect(
+      redactGitHubTokens(`In a URL: x-access-token:${token}@github.com`),
+    ).toBe("In a URL: x-access-token:[REDACTED_GITHUB_TOKEN]@github.com");
   });
 
   it("should redact installation tokens (ghs_)", () => {

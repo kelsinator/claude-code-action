@@ -54,6 +54,53 @@ describe("formatContext", () => {
 PR Author: test-user
 PR Branch: feature/test -> main
 PR State: OPEN
+PR Labels: none
+PR Additions: 50
+PR Deletions: 30
+Total Commits: 3
+Changed Files: 2 files`,
+    );
+  });
+
+  test("formats PR context with labels", () => {
+    const prData: GitHubPullRequest = {
+      title: "Test PR",
+      body: "PR body",
+      author: { login: "test-user" },
+      baseRefName: "main",
+      headRefName: "feature/test",
+      headRefOid: "abc123",
+      isCrossRepository: false,
+      headRepository: { owner: { login: "testowner" }, name: "testrepo" },
+      createdAt: "2023-01-01T00:00:00Z",
+      additions: 50,
+      deletions: 30,
+      state: "OPEN",
+      labels: {
+        nodes: [{ name: "bug" }, { name: "enhancement" }],
+      },
+      commits: {
+        totalCount: 3,
+        nodes: [],
+      },
+      files: {
+        nodes: [{} as GitHubFile, {} as GitHubFile],
+      },
+      comments: {
+        nodes: [],
+      },
+      reviews: {
+        nodes: [],
+      },
+    };
+
+    const result = formatContext(prData, true);
+    expect(result).toBe(
+      `PR Title: Test PR
+PR Author: test-user
+PR Branch: feature/test -> main
+PR State: OPEN
+PR Labels: bug, enhancement
 PR Additions: 50
 PR Deletions: 30
 Total Commits: 3
@@ -80,8 +127,52 @@ Changed Files: 2 files`,
     expect(result).toBe(
       `Issue Title: Test Issue
 Issue Author: test-user
-Issue State: OPEN`,
+Issue State: OPEN
+Issue Labels: none`,
     );
+  });
+
+  test("formats Issue context with labels", () => {
+    const issueData: GitHubIssue = {
+      title: "Test Issue",
+      body: "Issue body",
+      author: { login: "test-user" },
+      createdAt: "2023-01-01T00:00:00Z",
+      state: "OPEN",
+      labels: {
+        nodes: [
+          { name: "architecture" },
+          { name: "agent-sdk" },
+          { name: "drift:functional" },
+        ],
+      },
+      comments: {
+        nodes: [],
+      },
+    };
+
+    const result = formatContext(issueData, false);
+    expect(result).toBe(
+      `Issue Title: Test Issue
+Issue Author: test-user
+Issue State: OPEN
+Issue Labels: architecture, agent-sdk, drift:functional`,
+    );
+  });
+
+  test("renders a deleted (null-author) issue author as 'ghost'", () => {
+    const issueData: GitHubIssue = {
+      title: "Test Issue",
+      body: "Issue body",
+      author: null,
+      createdAt: "2023-01-01T00:00:00Z",
+      state: "OPEN",
+      labels: { nodes: [] },
+      comments: { nodes: [] },
+    };
+
+    const result = formatContext(issueData, false);
+    expect(result).toContain("Issue Author: ghost");
   });
 });
 
@@ -173,6 +264,24 @@ describe("formatComments", () => {
     const result = formatComments(comments);
     expect(result).toBe(
       `[user1 at 2023-01-01T00:00:00Z]: First comment\n\n[user2 at 2023-01-02T00:00:00Z]: Second comment`,
+    );
+  });
+
+  test("renders deleted (null-author) comments as 'ghost'", () => {
+    // GitHub returns author: null for comments from deleted accounts.
+    const comments: GitHubComment[] = [
+      {
+        id: "1",
+        databaseId: "100001",
+        body: "From a deleted account",
+        author: null,
+        createdAt: "2023-01-01T00:00:00Z",
+      },
+    ];
+
+    const result = formatComments(comments);
+    expect(result).toBe(
+      "[ghost at 2023-01-01T00:00:00Z]: From a deleted account",
     );
   });
 
@@ -415,6 +524,29 @@ describe("formatReviewComments", () => {
     const result = formatReviewComments(reviewData);
     expect(result).toBe(
       `[Review by reviewer1 at 2023-01-01T00:00:00Z]: COMMENTED\n  [Comment on src/main.ts:15]: Small suggestion here`,
+    );
+  });
+
+  test("renders deleted (null-author) reviews as 'ghost'", () => {
+    const reviewData = {
+      nodes: [
+        {
+          id: "review1",
+          databaseId: "300099",
+          author: null,
+          body: "Left before deleting the account",
+          state: "COMMENTED",
+          submittedAt: "2023-01-01T00:00:00Z",
+          comments: {
+            nodes: [],
+          },
+        },
+      ],
+    };
+
+    const result = formatReviewComments(reviewData);
+    expect(result).toBe(
+      `[Review by ghost at 2023-01-01T00:00:00Z]: COMMENTED\nLeft before deleting the account`,
     );
   });
 
